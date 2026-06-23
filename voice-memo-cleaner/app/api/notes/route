@@ -1,0 +1,74 @@
+// app/api/notes/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+export async function POST(req: NextRequest) {
+  const { transcript } = await req.json();
+
+  if (!transcript) {
+    return NextResponse.json(
+      { error: 'No transcript provided' },
+      { status: 400 }
+    );
+  }
+
+  // This prompt asks Gemini to return structured JSON.
+  // We show the exact shape of the JSON field names, types, nesting.
+  const prompt = `You are a smart note-taking assistant. Analyze this voice memo transcript and extract structured information.
+
+Return your response as a JSON object with EXACTLY this structure.
+Return raw JSON only — no markdown, no code fences, no explanation before or after:
+{
+  "title": "A short descriptive title for this memo (max 8 words)",
+  "summary": "2-3 sentences capturing the main point(s) of the memo",
+  "keyPoints": ["Key idea or fact 1", "Key idea or fact 2", "..."],
+  "actionItems": ["Task or follow-up 1", "Task or follow-up 2"]
+}
+
+Rules:
+- If there are no action items, set actionItems to an empty array: []
+- Key points should be concise — one sentence each
+- Do not invent information not present in the transcript
+- Return ONLY the JSON object, nothing else
+
+Transcript:
+${transcript}`;
+
+  const result = await model.generateContent(prompt);
+
+  // Get the raw text response from Gemini
+  const rawText = result.response.text();
+
+  // Defensive cleanup: even when we tell the model not to use markdown code fences,
+  // it sometimes wraps JSON in ```json ... ``` anyway.
+  // .replace() with a regex removes those fences:
+  //   /```json/g  matches the opening fence (g = all occurrences, not just first)
+  //   /```/g      matches the closing fence
+  // .trim() removes any leading or trailing whitespace or newlines.
+  const cleanedText = rawText
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim();
+
+  // JSON.parse() converts the raw JSON string → a real JavaScript object
+  // that we can work with (access .title, .summary, .keyPoints, etc.)
+  // We wrap it in try/catch because if Gemini returns something unparseable,
+  // JSON.parse() throws an error — and without catch, the whole route crashes.
+  try {
+    const notes = JSON.parse(cleanedText);
+    return NextResponse.json(notes);
+  } catch (err) {
+    // If parsing fails, log the error for debugging and return a 500.
+    // HTTP 500 = "Internal Server Error" — something went wrong on our end.
+    console.error('Failed to parse Gemini JSON response:', err);
+    console.error('Raw response was:', rawText); // Log the raw text to help debug
+    return NextResponse.json(
+      { error: 'Failed to parse notes from AI response' },
+      { status: 500 }
+    );
+  }
+}
