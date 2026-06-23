@@ -1,0 +1,59 @@
+// app/api/clean/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+
+// GoogleGenerativeAI is the main class from Google's SDK.
+// We use it to create a client that can talk to the Gemini API.
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// Initialize the Google AI client.
+// process.env.GEMINI_API_KEY reads the value from .env.local.
+// The ! at the end is a TypeScript non-null assertion — it tells TypeScript
+// "I promise this value exists at runtime, don't warn me it might be undefined."
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+// Get a reference to the specific Gemini model we want to use.
+// 'gemini-1.5-flash' is Google's free, fast model — perfect for text tasks like this.
+// (gemini-1.5-pro is smarter but has lower free-tier limits)
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+export async function POST(req: NextRequest) {
+
+  // This route receives JSON (not FormData) because we're sending text, not a file.
+  // req.json() parses the incoming JSON string into a JavaScript object.
+  // We destructure { transcript } directly from it.
+  const { transcript } = await req.json();
+
+  if (!transcript) {
+    return NextResponse.json(
+      { error: 'No transcript provided' },
+      { status: 400 }
+    );
+  }
+
+  // Build the prompt — the instruction we send to Gemini.
+  // Template literals (backtick strings) let us embed the variable ${transcript}
+  // directly into the instruction string. This is called "prompt injection" —
+  // we insert the real data into the instruction at the right place.
+  const prompt = `Clean up this voice memo transcript.
+Remove all filler words (um, uh, like, you know, basically, literally, sort of, kind of).
+Remove false starts (e.g. "I was- I mean I think").
+Remove stutters (e.g. "the the problem").
+Fix punctuation and capitalization.
+Preserve the speaker's meaning and tone exactly — do not rephrase or add new ideas.
+Return ONLY the cleaned transcript. No commentary, no preamble, no explanation.
+
+Transcript:
+${transcript}`;
+
+  // Send the prompt to Gemini and wait for a response.
+  // generateContent() is the main method for single-turn text generation —
+  // you send one message, you get one reply. No conversation history needed here.
+  const result = await model.generateContent(prompt);
+
+  // Extract the text from the response object.
+  // result.response.text() is Gemini's helper method that pulls out the plain text.
+  const cleaned = result.response.text();
+
+  return NextResponse.json({ cleaned });
+}
