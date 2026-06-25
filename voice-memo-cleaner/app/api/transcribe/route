@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   // This call uploads the file to Groq's servers and waits for the transcript back.
   const transcription = await groq.audio.transcriptions.create({
     file,                          // The audio File object from the request
-    model: 'whisper-large-v3',     // The Whisper model to use.
+    model: 'whisper-large-v3-turbo',     // The Whisper model to use.
                                    // whisper-large-v3 is Groq's best free model —
                                    // it's actually more accurate than OpenAI's whisper-1.
     response_format: 'text',       // Return plain text instead of JSON with timestamps.
