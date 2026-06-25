@@ -2,6 +2,7 @@
 // NextResponse: a helper to build the HTTP response we send back
 import { NextRequest, NextResponse } from 'next/server';
 
+
 // Import the official Groq SDK
 import Groq from 'groq-sdk';
 
