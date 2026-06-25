@@ -1,5 +1,3 @@
-// app/api/transcribe/route.ts
-
 // NextRequest: represents the incoming HTTP request (has the audio file attached)
 // NextResponse: a helper to build the HTTP response we send back
 import { NextRequest, NextResponse } from 'next/server';
